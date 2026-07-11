@@ -12,5 +12,8 @@ def test_deep_discount_passes():
 
 def test_marginal_discount_below_threshold_fails():
     # 4.6% markdown must FAIL the 5% genuine-discount bar.
-    # Currently rounds up to 5% and wrongly passes — this is PPCS-001.
     assert is_was_now_compliant(Promo("B", was_price=10.00, now_price=9.54)) is False
+
+
+def test_exact_five_percent_discount_passes():
+    assert is_was_now_compliant(Promo("D", was_price=10.00, now_price=9.50)) is True
