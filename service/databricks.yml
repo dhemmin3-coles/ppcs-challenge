@@ -1,0 +1,64 @@
+bundle:
+  name: ppcs-coda-challenge
+
+# The PPCS app is deployed from THIS repo (dgokeeffe/ppcs-challenge) via a
+# Databricks Git folder, not from a hand-staged Workspace Files copy. See
+# ../CI-AND-PROMOTION.md and challenge deploy docs for the git-deployment flow.
+
+sync:
+  exclude:
+    - .venv/**
+    - .pytest_cache/**
+    - tests/**
+
+resources:
+  apps:
+    ppcs_coda_challenge:
+      name: ppcs-coda-challenge
+      description: Enterprise CoDA Engineering Challenge PPCS workshop app
+      source_code_path: .
+      # Bind the Lakebase database as a first-class app resource so the app
+      # service principal is granted CAN_CONNECT_AND_CREATE on the instance.
+      # instance_name is workshop/workspace-specific (placeholder here, like the
+      # REPLACE_WITH_* env values); the facilitator supplies the real instance.
+      resources:
+        - name: lakebase
+          database:
+            instance_name: REPLACE_WITH_LAKEBASE_INSTANCE
+            database_name: databricks_postgres
+            permission: CAN_CONNECT_AND_CREATE
+      config:
+        command:
+          - /bin/bash
+          - -c
+          - uvicorn app.main:app --host 0.0.0.0 --port ${DATABRICKS_APP_PORT:-8000}
+        env:
+          - name: PPCS_ENV
+            value: workshop
+          - name: PPCS_OPERATING_ENVELOPE
+            value: coda-challenge-v1
+          - name: PPCS_TEAM_SCHEMA
+            value: REPLACE_WITH_TEAM_SCHEMA
+          - name: PPCS_EVENTS_TABLE
+            value: REPLACE_WITH_EVENTS_TABLE
+          - name: PPCS_TELEMETRY_SCHEMA
+            value: REPLACE_WITH_TELEMETRY_SCHEMA
+          - name: PPCS_SQL_WAREHOUSE_ID
+            value: REPLACE_WITH_SQL_WAREHOUSE_ID
+          - name: PPCS_ALLOWED_EVENTS_TABLE
+            value: main.coda_challenge.ppcs_validation_events
+          - name: PPCS_DENIED_MARGIN_OBJECT
+            value: main.coda_challenge.restricted_margin_by_sku
+          - name: PPCS_LAKEBASE_TARGET
+            value: REPLACE_WITH_LAKEBASE_TARGET
+          - name: PPCS_LAKEBASE_HOST
+            value: REPLACE_WITH_LAKEBASE_HOST
+
+targets:
+  # Set your own Databricks CLI profile here (or pass -p <profile> on the
+  # command line). The facilitator uses a private profile that is not shipped
+  # in this participant repo.
+  dev:
+    mode: development
+    workspace:
+      profile: DEFAULT

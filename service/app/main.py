@@ -108,30 +108,63 @@ def platform_uc_check() -> dict:
 
 @app.get("/platform/lakebase-check")
 def platform_lakebase_check() -> dict:
+    import uuid
+
     import psycopg
 
     lakebase_target = os.environ.get(
         "PPCS_LAKEBASE_TARGET",
-        "projects/ppcs-coda-challenge/branches/production/endpoints/primary",
+        "mlflow-trace-test",
     )
-    lakebase_host = os.environ.get(
-        "PPCS_LAKEBASE_HOST",
-        "ep-sweet-mud-e4rrnat1.database.australiaeast.azuredatabricks.net",
+    # A bound Databricks Apps `database` resource injects the connection
+    # coordinates (PGHOST/PGPORT/PGDATABASE/PGUSER) but no password — the app
+    # still mints its own short-lived OAuth token below. Prefer the injected
+    # values; fall back to PPCS_LAKEBASE_HOST for non-resource deploys.
+    lakebase_host = (
+        os.environ.get("PGHOST")
+        or os.environ.get("PPCS_LAKEBASE_HOST")
+        or "ep-restless-thunder-e4pr9wx3.database.australiaeast.azuredatabricks.net"
     )
+    lakebase_port = os.environ.get("PGPORT", "5432")
+    lakebase_dbname = os.environ.get("PGDATABASE", "databricks_postgres")
     team_schema = os.environ.get("PPCS_TEAM_SCHEMA", "team04")
 
     client = _workspace_client()
-    credential = client.api_client.do(
-        "POST",
-        "/api/2.0/postgres/credentials",
-        body={"endpoint": lakebase_target},
-    )
+    # Two Lakebase generations, two credential APIs (see docs/live-dry-run-commands.md):
+    #  - Autoscaling (Neon-style) target looks like
+    #    "projects/<p>/branches/<b>/endpoints/<e>" -> POST /api/2.0/postgres/credentials
+    #    with body {"endpoint": target}.
+    #  - Provisioned (classic) target is a bare instance name -> POST
+    #    /api/2.0/database/credentials with body {"request_id", "instance_names":[name]}.
+    if lakebase_target.startswith("projects/"):
+        credential = client.api_client.do(
+            "POST",
+            "/api/2.0/postgres/credentials",
+            body={"endpoint": lakebase_target},
+        )
+    else:
+        credential = client.api_client.do(
+            "POST",
+            "/api/2.0/database/credentials",
+            body={"request_id": str(uuid.uuid4()), "instance_names": [lakebase_target]},
+        )
     token = credential["token"]
+
+    # The Postgres role is the identity that minted the credential — the app
+    # service principal's application-id UUID. A bound `database` resource
+    # surfaces it as PGUSER; otherwise fall back to PPCS_LAKEBASE_USER or the
+    # SDK's current_user (DATABRICKS_CLIENT_ID is unset in the app runtime).
+    db_user = (
+        os.environ.get("PGUSER")
+        or os.environ.get("PPCS_LAKEBASE_USER")
+        or client.current_user.me().user_name
+    )
 
     with psycopg.connect(
         host=lakebase_host,
-        dbname="databricks_postgres",
-        user=os.environ.get("DATABRICKS_CLIENT_ID"),
+        port=lakebase_port,
+        dbname=lakebase_dbname,
+        user=db_user,
         password=token,
         sslmode="require",
     ) as conn:
