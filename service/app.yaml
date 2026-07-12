@@ -1,0 +1,26 @@
+command:
+  - /bin/bash
+  - -c
+  - uvicorn app.main:app --host 0.0.0.0 --port ${DATABRICKS_APP_PORT:-8000}
+
+env:
+  - name: PPCS_ENV
+    value: workshop
+  - name: PPCS_OPERATING_ENVELOPE
+    value: coda-challenge-v1
+  - name: PPCS_TEAM_SCHEMA
+    value: REPLACE_WITH_TEAM_SCHEMA
+  - name: PPCS_EVENTS_TABLE
+    value: REPLACE_WITH_EVENTS_TABLE
+  - name: PPCS_TELEMETRY_SCHEMA
+    value: REPLACE_WITH_TELEMETRY_SCHEMA
+  - name: PPCS_SQL_WAREHOUSE_ID
+    value: REPLACE_WITH_SQL_WAREHOUSE_ID
+  - name: PPCS_ALLOWED_EVENTS_TABLE
+    value: REPLACE_WITH_ALLOWED_EVENTS_TABLE
+  - name: PPCS_DENIED_MARGIN_OBJECT
+    value: REPLACE_WITH_DENIED_MARGIN_OBJECT
+  - name: PPCS_LAKEBASE_TARGET
+    value: REPLACE_WITH_LAKEBASE_TARGET
+  - name: PPCS_LAKEBASE_HOST
+    value: REPLACE_WITH_LAKEBASE_HOST
