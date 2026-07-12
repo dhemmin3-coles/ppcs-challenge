@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import argparse
 import glob
+import hashlib
 import os
 import sys
 from pathlib import Path
@@ -55,6 +56,53 @@ def _quote_ident(name: str) -> str:
     return name
 
 
+def _apply_files(conn, schema: str, files: list[str]) -> tuple[int, int]:
+    """Apply new migrations atomically and reject changed migration history."""
+    applied = 0
+    skipped = 0
+    with conn.cursor() as cur:
+        cur.execute(f"CREATE SCHEMA IF NOT EXISTS {schema}")
+        cur.execute(
+            f"CREATE TABLE IF NOT EXISTS {schema}._ppcs_schema_migrations ("
+            "version text PRIMARY KEY, checksum text NOT NULL, "
+            "applied_at timestamptz NOT NULL DEFAULT now())"
+        )
+    conn.commit()
+
+    for path in files:
+        version = Path(path).name
+        raw_sql = Path(path).read_text(encoding="utf-8")
+        checksum = hashlib.sha256(raw_sql.encode()).hexdigest()
+        with conn.cursor() as cur:
+            cur.execute(
+                f"SELECT checksum FROM {schema}._ppcs_schema_migrations "
+                "WHERE version = %s",
+                (version,),
+            )
+            row = cur.fetchone()
+            if row:
+                if row[0] != checksum:
+                    conn.rollback()
+                    raise SystemExit(
+                        f"migration {version} changed after it was applied"
+                    )
+                print(f"skipping {version} (already applied)", flush=True)
+                skipped += 1
+                continue
+
+            print(f"applying {version} -> schema {schema}", flush=True)
+            cur.execute(raw_sql.replace(":schema", schema))
+            cur.execute(
+                f"INSERT INTO {schema}._ppcs_schema_migrations "
+                "(version, checksum) VALUES (%s, %s)",
+                (version, checksum),
+            )
+        conn.commit()
+        applied += 1
+
+    return applied, skipped
+
+
 def apply_migrations(schema: str, host: str, target: str) -> None:
     import psycopg
 
@@ -70,14 +118,9 @@ def apply_migrations(schema: str, host: str, target: str) -> None:
         user=_db_user(),
         password=token,
         sslmode="require",
-        autocommit=True,
     ) as conn:
-        for path in files:
-            sql = Path(path).read_text(encoding="utf-8").replace(":schema", schema)
-            print(f"applying {Path(path).name} -> schema {schema}", flush=True)
-            with conn.cursor() as cur:
-                cur.execute(sql)
-    print(f"OK: {len(files)} migration(s) applied to {schema}")
+        applied, skipped = _apply_files(conn, schema, files)
+    print(f"OK: {applied} applied, {skipped} already applied to {schema}")
 
 
 def main() -> None:

@@ -61,7 +61,9 @@ ALTER TABLE :schema.ppcs_rule_config
 ```
 
 Keep migrations idempotent (`IF NOT EXISTS`, `ON CONFLICT`) so they can re-run
-safely. CI applies them in filename order.
+safely. CI applies them in filename order and records each filename plus its
+SHA-256 checksum in `<schema>._ppcs_schema_migrations`. A rerun skips recorded
+migrations; changing a migration after it has been applied fails the run.
 
 ## Connecting (no secrets)
 

@@ -67,8 +67,14 @@ def _endpoint_url(name: str) -> str:
     return f"/api/2.0/postgres/{_endpoint_path(name)}"
 
 
-def _do(client, method: str, path: str, body: dict | None = None) -> dict:
-    return client.api_client.do(method, path, body=body or {})
+def _do(
+    client,
+    method: str,
+    path: str,
+    body: dict | None = None,
+    query: dict | None = None,
+) -> dict:
+    return client.api_client.do(method, path, body=body or {}, query=query)
 
 
 def create(name: str, ttl_seconds: int, github_env: str | None) -> None:
@@ -80,29 +86,35 @@ def create(name: str, ttl_seconds: int, github_env: str | None) -> None:
         "POST",
         _branches_url(),
         {
-            "branch_id": name,
             "spec": {
                 "source_branch": _branch_path(SOURCE),
                 "ttl": f"{ttl_seconds}s",
             },
         },
+        {"branch_id": name},
     )
 
     # RW autoscaling endpoint on the new branch.
-    _do(
-        client,
-        "POST",
-        _endpoints_url(name),
-        {
-            "endpoint_id": "primary",
-            "spec": {
-                "endpoint_type": "ENDPOINT_TYPE_READ_WRITE",
-                "autoscaling_limit_min_cu": 0.5,
-                "autoscaling_limit_max_cu": 4,
-                "suspend_timeout_duration": "300s",
+    try:
+        _do(
+            client,
+            "POST",
+            _endpoints_url(name),
+            {
+                "spec": {
+                    "endpoint_type": "ENDPOINT_TYPE_READ_WRITE",
+                    "autoscaling_limit_min_cu": 0.5,
+                    "autoscaling_limit_max_cu": 4,
+                    "suspend_timeout_duration": "300s",
+                },
             },
-        },
-    )
+            {"endpoint_id": "primary"},
+        )
+    except Exception as exc:
+        # Newer Lakebase API versions auto-create the primary RW endpoint with
+        # the branch; older versions require the explicit call above.
+        if "endpoint already exists" not in str(exc).lower():
+            raise
 
     host = _wait_for_host(client, name)
 

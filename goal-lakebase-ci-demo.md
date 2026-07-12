@@ -102,7 +102,8 @@ uv run --project service python ci/run_migrations.py \
 ## Acceptance evidence
 
 - The ephemeral branch reports `source_branch = production`.
-- Migration output ends with `OK: <n> migration(s) applied`.
+- First-run migration output reports the applied count; a second run reports
+  `0 applied` and skips the ledgered migrations.
 - The smoke test ends with `PASS` for the ephemeral branch/schema.
 - The PPCS test evaluator accepts the result.
 - The ephemeral branch no longer exists after the demo.
