@@ -9,7 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.rules import Promo, discount_pct, is_was_now_compliant
+from app.rules import Promo, discount_pct_display, is_was_now_compliant
 
 app = FastAPI(title="Promotional Pricing Compliance Service")
 STATIC_DIR = Path(__file__).parent / "static"
@@ -32,7 +32,7 @@ def validate(promo: PromoIn) -> dict:
     p = Promo(promo.sku, promo.was_price, promo.now_price)
     return {
         "sku": p.sku,
-        "discount_pct": discount_pct(p),
+        "discount_pct": discount_pct_display(p),
         "was_now_compliant": is_was_now_compliant(p),
     }
 
