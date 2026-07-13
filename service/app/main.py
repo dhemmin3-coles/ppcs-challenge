@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 
 from fastapi import FastAPI
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -29,6 +29,21 @@ def workbench() -> FileResponse:
 
 @app.post("/validate")
 def validate(promo: PromoIn) -> dict:
+    if promo.was_price <= 0:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "was_price must be greater than 0"},
+        )
+    if promo.now_price < 0:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "now_price must be 0 or greater"},
+        )
+    if promo.now_price > promo.was_price:
+        return JSONResponse(
+            status_code=422,
+            content={"error": "now_price must not exceed was_price"},
+        )
     p = Promo(promo.sku, promo.was_price, promo.now_price)
     return {
         "sku": p.sku,
