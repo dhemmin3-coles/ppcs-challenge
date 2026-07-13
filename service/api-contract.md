@@ -147,6 +147,18 @@ price is rejected with a `400`.
 non-compliant for the member pricing rule. The response adds
 `member_price_compliant`.
 
+Rules (implemented by PPCS-009):
+- `member_price_compliant` is present **only** when `member_only=true`; a
+  non-member (public) promo is not governed by this rule, so the field is
+  omitted and the plain was/now response shape is unchanged.
+- The general-public channels are `public`, `general`, and `storewide`
+  (case-insensitive). A member-only promo on any of these is
+  `member_price_compliant: false`.
+- A missing or unrecognised `display_channel` is treated as non-public, so an
+  ambiguous label does not spuriously fail a member-only promo
+  (`member_price_compliant: true`).
+- This rule is independent of `was_now_compliant`, which is unchanged.
+
 ### `/validate` response — `was_price_verified` field (PPCS-056)
 
 When the service can look up the SKU in the team's price history, the response

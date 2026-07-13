@@ -9,7 +9,13 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.rules import Promo, discount_pct, is_was_now_compliant
+from app.rules import (
+    Promo,
+    discount_pct,
+    is_member_price_compliant,
+    is_member_price_rule_applicable,
+    is_was_now_compliant,
+)
 
 app = FastAPI(title="Promotional Pricing Compliance Service")
 STATIC_DIR = Path(__file__).parent / "static"
@@ -20,6 +26,10 @@ class PromoIn(BaseModel):
     sku: str
     was_price: float
     now_price: float
+    # Member-pricing disclosure (PPCS-009). Optional: the member rule is only
+    # evaluated when member_only is true.
+    member_only: bool = False
+    display_channel: str | None = None
 
 
 @app.get("/", include_in_schema=False)
@@ -29,12 +39,23 @@ def workbench() -> FileResponse:
 
 @app.post("/validate")
 def validate(promo: PromoIn) -> dict:
-    p = Promo(promo.sku, promo.was_price, promo.now_price)
-    return {
+    p = Promo(
+        promo.sku,
+        promo.was_price,
+        promo.now_price,
+        member_only=promo.member_only,
+        display_channel=promo.display_channel,
+    )
+    result = {
         "sku": p.sku,
         "discount_pct": discount_pct(p),
         "was_now_compliant": is_was_now_compliant(p),
     }
+    # Only surface the member verdict when the rule applies, so the plain
+    # was/now response shape stays pinned to its stable contract.
+    if is_member_price_rule_applicable(p):
+        result["member_price_compliant"] = is_member_price_compliant(p)
+    return result
 
 
 def _execute_sql(statement: str) -> dict:
