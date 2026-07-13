@@ -4,7 +4,9 @@ The report is *generated* and *pulled*; it is never auto-pushed to an external
 dashboard (that would be raw outbound egress outside the operating envelope).
 These tests exercise the builder and the read endpoint with no live creds.
 """
-from app.main import app, daily_violations_report
+from fastapi.testclient import TestClient
+
+from app.main import app, _violations_provider, daily_violations_report
 from app.reports import Violation, build_daily_violations_report
 
 
@@ -48,12 +50,44 @@ def test_report_rows_preserve_contract_fields():
     assert first["rule_ids"] == ["was_now"]
 
 
-def test_endpoint_returns_report_json_with_injected_provider():
-    # Call the handler directly with an injected provider — no DB, no network.
-    result = daily_violations_report(report_date="2026-07-13", provider=_sample)
+def test_endpoint_returns_report_json_with_injected_violations():
+    # Call the handler directly with an injected (already-resolved) list — the
+    # dependency yields the list, so the handler receives a list, not a callable.
+    result = daily_violations_report(report_date="2026-07-13", violations=_sample())
     assert result["report_date"] == "2026-07-13"
     assert result["total_violations"] == 3
     assert result["violations_by_rule"] == {"was_now": 2, "duration": 2}
+
+
+def test_endpoint_serves_report_over_http_default_empty():
+    # Exercise the real HTTP route (not just the handler fn). The default
+    # provider yields an empty list, so this must be 200 with an empty report —
+    # no live Lakebase credentials required.
+    client = TestClient(app)
+    response = client.get("/reports/violations/daily", params={"report_date": "2026-07-13"})
+    assert response.status_code == 200
+    body = response.json()
+    assert body["report_date"] == "2026-07-13"
+    assert body["total_violations"] == 0
+    assert body["violations"] == []
+
+
+def test_endpoint_serves_report_over_http_with_dependency_override():
+    # Override the violations source the way a governed job would, and drive the
+    # real route end-to-end.
+    client = TestClient(app)
+    app.dependency_overrides[_violations_provider] = _sample
+    try:
+        response = client.get(
+            "/reports/violations/daily", params={"report_date": "2026-07-13"}
+        )
+    finally:
+        app.dependency_overrides.clear()
+    assert response.status_code == 200
+    body = response.json()
+    assert body["total_violations"] == 3
+    assert body["violations_by_rule"] == {"was_now": 2, "duration": 2}
+    assert set(body["violations"][0]) == {"sku", "rule_ids", "reason", "timestamp"}
 
 
 def test_endpoint_registered_as_get_only():

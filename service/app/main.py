@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Callable
 
 from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse
@@ -53,7 +52,7 @@ def _violations_provider() -> list[Violation]:
 @app.get("/reports/violations/daily")
 def daily_violations_report(
     report_date: str,
-    provider: Callable[[], list[Violation]] = Depends(_violations_provider),
+    violations: list[Violation] = Depends(_violations_provider),
 ) -> dict:
     """Return the daily violations report as JSON (PPCS-012).
 
@@ -61,8 +60,12 @@ def daily_violations_report(
     pull the report. It deliberately does not push to an external dashboard —
     automated delivery belongs to PPCS-020 (Databricks Workflows + governed
     Slack MCP), not to raw outbound egress from this handler.
+
+    `violations` is resolved by FastAPI from the `_violations_provider`
+    dependency (an empty list by default; override the dependency to supply
+    real rows). It is the already-resolved list, not a callable.
     """
-    report = build_daily_violations_report(provider(), report_date)
+    report = build_daily_violations_report(violations, report_date)
     return report.to_dict()
 
 
