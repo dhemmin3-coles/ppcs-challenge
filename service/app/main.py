@@ -10,10 +10,16 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.rules import Promo, discount_pct, is_was_now_compliant
+from app.violations import ViolationRepository
 
 app = FastAPI(title="Promotional Pricing Compliance Service")
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
+
+# Process-local store of recent non-compliant verdicts (PPCS-014). In-memory so
+# the /violations endpoint works without live Lakebase credentials; a later
+# ticket can swap in a persistent repository behind the same interface.
+violation_repo = ViolationRepository()
 
 
 class PromoIn(BaseModel):
@@ -30,11 +36,34 @@ def workbench() -> FileResponse:
 @app.post("/validate")
 def validate(promo: PromoIn) -> dict:
     p = Promo(promo.sku, promo.was_price, promo.now_price)
+    compliant = is_was_now_compliant(p)
+    if not compliant:
+        # Record the non-compliant verdict so support teams can pull it from
+        # /violations. Only the sku, failed rule id, and a redacted reason are
+        # stored — never the raw prices (see api-contract.md logging rule).
+        violation_repo.record(
+            sku=p.sku,
+            rule_ids=["was_now"],
+            reason="was/now markdown below the genuine-discount threshold",
+        )
     return {
         "sku": p.sku,
         "discount_pct": discount_pct(p),
-        "was_now_compliant": is_was_now_compliant(p),
+        "was_now_compliant": compliant,
     }
+
+
+@app.get("/violations")
+def violations() -> list[dict]:
+    """Return recent non-compliant validations (PPCS-014).
+
+    A simple read feed for support teams: only non-compliant verdicts, newest
+    first, sourced from the in-memory `violation_repo`. Testable without live
+    Lakebase credentials. Compliant promos never appear here because they are
+    never recorded. The `sku` and `reason` fields are consumed by the workbench
+    UI (static/app.js) and must not be renamed.
+    """
+    return [v.to_dict() for v in violation_repo.recent()]
 
 
 def _execute_sql(statement: str) -> dict:

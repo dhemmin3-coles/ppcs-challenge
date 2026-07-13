@@ -178,9 +178,16 @@ constants. The API contract does not change. The implementation must:
 - Keep the rule logic injectable/testable without a live database.
 - Document the fallback behaviour if the config row is missing.
 
-### `GET /violations`
+### `GET /violations` (PPCS-014) — IMPLEMENTED
 
 Returns recent non-compliant validations from the app's local state.
+
+Non-compliant `/validate` verdicts are recorded into an in-memory
+`ViolationRepository` (see `app/violations.py`); `/violations` reads them back
+newest-first. The store is process-local, so it needs no live Lakebase
+credentials — a later ticket can swap in a persistent repository behind the same
+`record` / `recent` interface. Only `sku`, failed `rule_ids`, and a redacted
+`reason` are stored; raw prices are never persisted or logged.
 
 **Response 200** (`application/json`)
 
