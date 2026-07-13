@@ -4,22 +4,34 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.rules import Promo, discount_pct, is_was_now_compliant
+from app.rules import (
+    MultiBuy,
+    Promo,
+    discount_pct,
+    effective_unit_price,
+    is_was_now_compliant,
+)
 
 app = FastAPI(title="Promotional Pricing Compliance Service")
 STATIC_DIR = Path(__file__).parent / "static"
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
+class MultiBuyIn(BaseModel):
+    quantity: int
+    bundle_price: float
+
+
 class PromoIn(BaseModel):
     sku: str
     was_price: float
     now_price: float
+    multi_buy: MultiBuyIn | None = None
 
 
 @app.get("/", include_in_schema=False)
@@ -30,11 +42,18 @@ def workbench() -> FileResponse:
 @app.post("/validate")
 def validate(promo: PromoIn) -> dict:
     p = Promo(promo.sku, promo.was_price, promo.now_price)
-    return {
+    result = {
         "sku": p.sku,
         "discount_pct": discount_pct(p),
         "was_now_compliant": is_was_now_compliant(p),
     }
+    if promo.multi_buy is not None:
+        offer = MultiBuy(promo.multi_buy.quantity, promo.multi_buy.bundle_price)
+        try:
+            result["effective_unit_price"] = effective_unit_price(offer)
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return result
 
 
 def _execute_sql(statement: str) -> dict:
