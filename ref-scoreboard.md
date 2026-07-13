@@ -24,7 +24,7 @@ Efficiency tiebreak: governed value per token. If teams tie, prefer the team wit
 |---|---:|---:|---:|---:|---:|---:|---|
 | Team 1 |  |  |  |  |  |  |  |
 | Team 2 |  |  |  |  |  |  |  |
-| Team 3 |  |  |  |  |  |  |  |
+| Team 3 | +3 (PPCS-006 #11) |  | +5 (window → 400) |  |  | +8 proposed | PR #11; commits cc738d5/457c164; service/PPCS-006-evidence.md; service/PPCS-006-trace-review.md; 12 tests passed. **Pending: trace id + human accept.** |
 | Team 4 |  |  |  |  |  |  |  |
 | Team 5 |  |  |  |  |  |  |  |
 | Team 6 |  |  |  |  |  |  |  |
