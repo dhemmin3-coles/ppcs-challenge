@@ -1,0 +1,4 @@
+interface:
+  display_name: "Write Draft PR"
+  short_description: "Create consistent participant-safe draft PRs"
+  default_prompt: "Use $write-draft-pr to prepare and open a consistent PPCS draft pull request."
