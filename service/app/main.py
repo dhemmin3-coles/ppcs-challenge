@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -9,7 +10,12 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from app.rules import Promo, discount_pct, is_was_now_compliant
+from app.rules import (
+    Promo,
+    discount_pct,
+    is_duration_compliant,
+    is_was_now_compliant,
+)
 
 app = FastAPI(title="Promotional Pricing Compliance Service")
 STATIC_DIR = Path(__file__).parent / "static"
@@ -20,6 +26,10 @@ class PromoIn(BaseModel):
     sku: str
     was_price: float
     now_price: float
+    # Optional promo window (PPCS-006). Both must be present for the duration
+    # rule to be evaluated.
+    start_date: date | None = None
+    end_date: date | None = None
 
 
 @app.get("/", include_in_schema=False)
@@ -29,12 +39,23 @@ def workbench() -> FileResponse:
 
 @app.post("/validate")
 def validate(promo: PromoIn) -> dict:
-    p = Promo(promo.sku, promo.was_price, promo.now_price)
-    return {
+    p = Promo(
+        promo.sku,
+        promo.was_price,
+        promo.now_price,
+        start_date=promo.start_date,
+        end_date=promo.end_date,
+    )
+    result = {
         "sku": p.sku,
         "discount_pct": discount_pct(p),
         "was_now_compliant": is_was_now_compliant(p),
     }
+    # Only surface the duration verdict when a window was supplied, so the
+    # dates-less /validate response shape stays pinned to its stable contract.
+    if p.start_date is not None and p.end_date is not None:
+        result["duration_compliant"] = is_duration_compliant(p)
+    return result
 
 
 def _execute_sql(statement: str) -> dict:

@@ -97,7 +97,7 @@ Rules:
   optional and separate.
 - The existing `was_now_compliant` field must remain unchanged.
 
-### `/validate` request — duration fields (PPCS-006)
+### `/validate` request — duration fields (PPCS-006) — IMPLEMENTED
 
 ```json
 {
@@ -110,9 +110,16 @@ Rules:
 ```
 
 `start_date` and `end_date` are optional ISO-8601 dates. When absent, the
-duration rule is not evaluated. When present, a promo must span at least 7
-calendar days (inclusive) to pass the duration rule. The response adds a
-`duration_compliant` boolean alongside `was_now_compliant`.
+duration rule is not evaluated and the response shape is unchanged (no
+`duration_compliant` key). When **both** are present, a promo must span at
+least 7 calendar days, counted **inclusively** of both endpoints, to pass the
+duration rule; the response then adds a `duration_compliant` boolean alongside
+`was_now_compliant`.
+
+Duration counting is inclusive: `days = (end_date - start_date).days + 1`. So
+`2026-07-13 .. 2026-07-19` is 7 days (compliant) and `2026-07-13 .. 2026-07-18`
+is 6 days (non-compliant). The two rules are independent — a promo can pass
+was/now and fail duration, or fail both.
 
 ### `/validate` request — multi-buy fields (PPCS-010)
 
