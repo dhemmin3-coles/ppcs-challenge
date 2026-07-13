@@ -121,6 +121,18 @@ Duration counting is inclusive: `days = (end_date - start_date).days + 1`. So
 is 6 days (non-compliant). The two rules are independent — a promo can pass
 was/now and fail duration, or fail both.
 
+A promo window must be well-formed. The endpoint rejects these with `400`
+(mirroring PPCS-004's price-relationship rejections) rather than silently
+skipping the rule or coercing a nonsensical window to non-compliant:
+
+| Status | Condition |
+|--------|-----------|
+| `400`  | Only one of `start_date` / `end_date` supplied (half-specified window) |
+| `400`  | `end_date` is before `start_date` (inverted window) |
+
+`start_date == end_date` is a valid one-day window (returns `200`,
+`duration_compliant: false`). A malformed date string is a `422` (Pydantic).
+
 ### `/validate` request — multi-buy fields (PPCS-010)
 
 ```json

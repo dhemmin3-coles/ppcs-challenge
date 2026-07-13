@@ -5,7 +5,7 @@ import os
 from datetime import date
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -39,6 +39,26 @@ def workbench() -> FileResponse:
 
 @app.post("/validate")
 def validate(promo: PromoIn) -> dict:
+    # A promo window is either fully specified or fully absent. Reject a
+    # half-specified window and an inverted (end before start) window with a
+    # 400 rather than silently skipping the rule or coercing a nonsensical
+    # window to non-compliant (PPCS-006 warns against date-arithmetic
+    # shortcuts; this mirrors PPCS-004's explicit price-relationship rejection).
+    if (promo.start_date is None) != (promo.end_date is None):
+        raise HTTPException(
+            status_code=400,
+            detail="start_date and end_date must be supplied together.",
+        )
+    if (
+        promo.start_date is not None
+        and promo.end_date is not None
+        and promo.end_date < promo.start_date
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="end_date must not be before start_date.",
+        )
+
     p = Promo(
         promo.sku,
         promo.was_price,
