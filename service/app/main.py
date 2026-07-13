@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
+from typing import Callable
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app.reports import Violation, build_daily_violations_report
 from app.rules import Promo, discount_pct, is_was_now_compliant
 
 app = FastAPI(title="Promotional Pricing Compliance Service")
@@ -35,6 +37,33 @@ def validate(promo: PromoIn) -> dict:
         "discount_pct": discount_pct(p),
         "was_now_compliant": is_was_now_compliant(p),
     }
+
+
+def _violations_provider() -> list[Violation]:
+    """Source of recent violations for the daily report.
+
+    Default is an empty list so the endpoint is safe and testable without live
+    Lakebase credentials. A later ticket (or PPCS-014's /violations state) can
+    override this dependency to supply real rows; the report builder stays
+    unchanged. No promo payloads are logged here.
+    """
+    return []
+
+
+@app.get("/reports/violations/daily")
+def daily_violations_report(
+    report_date: str,
+    provider: Callable[[], list[Violation]] = Depends(_violations_provider),
+) -> dict:
+    """Return the daily violations report as JSON (PPCS-012).
+
+    This is a *governed read* path: Promo Ops (or a scheduled governed job)
+    pull the report. It deliberately does not push to an external dashboard —
+    automated delivery belongs to PPCS-020 (Databricks Workflows + governed
+    Slack MCP), not to raw outbound egress from this handler.
+    """
+    report = build_daily_violations_report(provider(), report_date)
+    return report.to_dict()
 
 
 def _execute_sql(statement: str) -> dict:

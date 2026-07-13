@@ -203,6 +203,41 @@ Rules:
 - The existing `app.js` reads `violation.sku` and `violation.reason` — do not
   rename those fields.
 
+### `GET /reports/violations/daily` (PPCS-012) — IMPLEMENTED
+
+Returns the daily violations report as JSON. This is a **governed read** path:
+Promo Ops (or a governed scheduled job) *pull* the report. The service does
+**not** auto-push it to an external dashboard — automated delivery is PPCS-020's
+job (Databricks Workflows + governed Slack MCP). See
+`PPCS-012-boundary-decision.md`.
+
+**Request**: query param `report_date` (string, ISO-8601 date, required).
+
+**Response 200** (`application/json`)
+
+```json
+{
+  "report_date": "2026-07-13",
+  "total_violations": 3,
+  "violations_by_rule": { "was_now": 2, "duration": 2 },
+  "violations": [
+    {
+      "sku": "SKU-1",
+      "rule_ids": ["was_now"],
+      "reason": "discount below threshold",
+      "timestamp": "2026-07-13T01:00:00Z"
+    }
+  ]
+}
+```
+
+Rules:
+- The violations source is an injectable dependency; the endpoint is testable
+  without live Lakebase credentials (defaults to an empty list).
+- Read-only: no auto-push, no outbound HTTP from the handler.
+- Row fields match the `/violations` shape (`sku`, `rule_ids`, `reason`,
+  `timestamp`).
+
 ### `POST /validate/batch` (PPCS-029, PPCS-046)
 
 Accepts multiple promos in one request and returns per-promo results. One
