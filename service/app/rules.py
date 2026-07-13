@@ -19,12 +19,8 @@ class Promo:
 
 
 def discount_pct(promo: Promo) -> float:
-    """Percentage markdown from was→now.
-
-    BUG (PPCS-001): rounds to a whole percent *before* the threshold check, so a
-    4.6% discount becomes 5% and wrongly clears the genuine-discount bar.
-    """
-    return round((promo.was_price - promo.now_price) / promo.was_price * 100)
+    """Percentage markdown from was→now, unrounded so threshold checks are exact."""
+    return (promo.was_price - promo.now_price) / promo.was_price * 100
 
 
 def is_was_now_compliant(promo: Promo) -> bool:

@@ -32,7 +32,7 @@ def validate(promo: PromoIn) -> dict:
     p = Promo(promo.sku, promo.was_price, promo.now_price)
     return {
         "sku": p.sku,
-        "discount_pct": discount_pct(p),
+        "discount_pct": round(discount_pct(p), 2),
         "was_now_compliant": is_was_now_compliant(p),
     }
 
