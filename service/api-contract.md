@@ -49,11 +49,35 @@ unrounded markdown internally; do not use `discount_pct` as the threshold gate.
 
 | Status | Condition |
 |--------|-----------|
+| `400`  | Invalid price relationship (PPCS-004) |
 | `422`  | Missing or wrong-type fields (FastAPI/Pydantic default) |
 
-PPCS-004 adds explicit `400` rejections for invalid price relationships
-(`was_price ≤ 0`, `now_price < 0`, `now_price > was_price`). Once that ticket
-is implemented, document the error body shape here.
+`400` is returned for impossible price relationships so a bad promo is never
+evaluated as a normal pass/fail verdict. The three rejected cases are:
+
+| `error_code`                  | Condition                |
+|-------------------------------|--------------------------|
+| `invalid_was_price`           | `was_price <= 0`         |
+| `invalid_now_price`           | `now_price < 0`          |
+| `now_price_exceeds_was_price` | `now_price > was_price`  |
+
+`now_price == 0` (a free item) is valid. Checks are evaluated in the order
+above, so a single response reports the first failing condition.
+
+**Error body** (`application/json`) — the standard FastAPI `detail` envelope
+with a structured object:
+
+```json
+{
+  "detail": {
+    "error_code": "invalid_was_price",
+    "message": "was_price must be greater than 0"
+  }
+}
+```
+
+- `error_code` is a stable, machine-readable identifier for the rejected case.
+- `message` is human-readable and may change; do not gate on it.
 
 ---
 

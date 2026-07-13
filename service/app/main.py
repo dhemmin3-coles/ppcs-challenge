@@ -4,7 +4,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
@@ -27,8 +27,43 @@ def workbench() -> FileResponse:
     return FileResponse(STATIC_DIR / "index.html")
 
 
+def _reject_invalid_prices(was_price: float, now_price: float) -> None:
+    """Reject impossible price relationships with a 400 (PPCS-004).
+
+    These are client input errors, not compliance verdicts: an impossible promo
+    must never be evaluated as a normal pass/fail. Ordered so the ``was_price``
+    check runs first — a non-positive ``was_price`` would otherwise divide by
+    zero (or invert the sign) inside ``discount_pct``.
+    """
+    if was_price <= 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "invalid_was_price",
+                "message": "was_price must be greater than 0",
+            },
+        )
+    if now_price < 0:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "invalid_now_price",
+                "message": "now_price must not be negative",
+            },
+        )
+    if now_price > was_price:
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "error_code": "now_price_exceeds_was_price",
+                "message": "now_price must not exceed was_price",
+            },
+        )
+
+
 @app.post("/validate")
 def validate(promo: PromoIn) -> dict:
+    _reject_invalid_prices(promo.was_price, promo.now_price)
     p = Promo(promo.sku, promo.was_price, promo.now_price)
     return {
         "sku": p.sku,
